@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Testnet BTC TimeLock Generator</title>
-  <script src="https://cdn.jsdelivr.net/npm/bitcoinjs-lib@3.3.2/dist/bitcoinjs-lib.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/bitcoinjs-lib/3.3.2/bitcoinjs.min.js"></script>
   <style>
     body { font-family: monospace; padding: 20px; background: #111; color: #0f0; }
     input, button { padding: 8px; background: #222; color: #0f0; border: 1px solid #0f0; }
@@ -58,7 +58,7 @@
       const now = Math.floor(Date.now() / 1000);
       if (locktime < now) return alert("⚠️ Дата в прошлом");
 
-      const network = bitcoin.networks.testnet;
+      const network = bitcoin.networks;
       const keyPair = bitcoin.ECPair.makeRandom({ network });
       const pubkey = keyPair.getPublicKeyBuffer();
       const wif = keyPair.toWIF();
