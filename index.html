@@ -1,86 +1,70 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Testnet BTC TimeLock Generator</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/bitcoinjs-lib/3.3.2/bitcoinjs.min.js"></script>
-  <style>
-    body { font-family: monospace; padding: 20px; background: #111; color: #0f0; }
-    input, button { padding: 8px; background: #222; color: #0f0; border: 1px solid #0f0; }
-    .box { margin-top: 20px; padding: 10px; background: #222; border: 1px solid #0f0; }
-    label { display: inline-block; width: 240px; }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Генератор адреса с таймлоком (BTC Mainnet)</title>
 </head>
 <body>
-  <h2>🔐 Time-Locked BTC Testnet Address</h2>
+  <h1>🔐 Адрес с таймлоком для BTC Mainnet</h1>
 
-  <label>⏳ UNIX Timestamp (locktime):</label>
-  <input type="number" id="locktime" value="1750000000" oninput="updateDate()">
-  <span id="humandate"></span>
-  <br>
-  <label>📅 Или выбери дату:</label>
-  <input type="datetime-local" id="localdatetime" onchange="setUnixFromDate()">
-  <br><br>
-  <button onclick="generate()">🎲 Сгенерировать</button>
+  <p>
+    <label for="locktime">⏳ UNIX-время (locktime):</label><br>
+    <input type="number" id="locktime" placeholder="Введите UNIX-время">
+  </p>
 
-  <div class="box" id="output" style="display:none;">
-    <p><strong>🔑 WIF:</strong> <span id="wif"></span></p>
-    <p><strong>📢 Public key:</strong> <span id="pubkey"></span></p>
-    <p><strong>🧾 Redeem script:</strong> <span id="redeem"></span></p>
-    <p><strong>📬 P2SH Testnet Address:</strong> <span id="address"></span></p>
-  </div>
+  <p>📅 Или выберите дату:</p>
+  <input type="date" id="date">
 
+  <p><button onclick="generate()">🎲 Сгенерировать</button></p>
+
+  <p><strong>🔑 WIF:</strong> <span id="wif"></span></p>
+  <p><strong>📢 Публичный ключ:</strong> <span id="pubkey"></span></p>
+  <p><strong>🧾 Redeem-скрипт:</strong> <span id="redeemScript"></span></p>
+  <p><strong>📬 P2SH Mainnet-адрес:</strong> <span id="address"></span></p>
+
+  <script src="https://cdn.jsdelivr.net/npm/bitcoinjs-lib@6.1.7/dist/bitcoinjs-lib.umd.js"></script>
   <script>
-    function updateDate() {
-      const ts = parseInt(document.getElementById("locktime").value);
-      if (!isNaN(ts)) {
-        const date = new Date(ts * 1000);
-        document.getElementById("humandate").innerText = "🕒 " + date.toLocaleString();
-        document.getElementById("localdatetime").value = date.toISOString().slice(0,16);
-      } else {
-        document.getElementById("humandate").innerText = "";
+    function generate() {
+      try {
+        const bitcoin = window.bitcoinjs;
+        const mainnet = bitcoin.networks.bitcoin;
+
+        const keyPair = bitcoin.ECPair.makeRandom({ network: mainnet });
+
+        const locktimeInput = document.getElementById('locktime').value;
+        const locktime = locktimeInput ? parseInt(locktimeInput) : Math.floor(Date.now() / 1000) + 86400;
+
+        const redeemScript = bitcoin.script.compile([
+          bitcoin.script.number.encode(locktime),
+          bitcoin.opcodes.OP_CHECKLOCKTIMEVERIFY,
+          bitcoin.opcodes.OP_DROP,
+          bitcoin.opcodes.OP_DUP,
+          bitcoin.opcodes.OP_HASH160,
+          bitcoin.crypto.hash160(keyPair.publicKey),
+          bitcoin.opcodes.OP_EQUALVERIFY,
+          bitcoin.opcodes.OP_CHECKSIG
+        ]);
+
+        const p2sh = bitcoin.payments.p2sh({
+          redeem: { output: redeemScript, network: mainnet },
+          network: mainnet
+        });
+
+        document.getElementById('wif').textContent = keyPair.toWIF();
+        document.getElementById('pubkey').textContent = keyPair.publicKey.toString('hex');
+        document.getElementById('redeemScript').textContent = redeemScript.toString('hex');
+        document.getElementById('address').textContent = p2sh.address;
+      } catch (error) {
+        console.error('Ошибка генерации адреса:', error);
+        alert('Ошибка генерации адреса: ' + error.message);
       }
     }
 
-    function setUnixFromDate() {
-      const input = document.getElementById("localdatetime").value;
-      const ts = Math.floor(new Date(input).getTime() / 1000);
-      document.getElementById("locktime").value = ts;
-      updateDate();
-    }
-
-    function generate() {
-      updateDate();
-
-      const locktime = parseInt(document.getElementById("locktime").value);
-      if (isNaN(locktime)) return alert("Неверный формат locktime");
-
-      const now = Math.floor(Date.now() / 1000);
-      if (locktime < now) return alert("⚠️ Дата в прошлом");
-
-      const network = bitcoin.networks;
-      const keyPair = bitcoin.ECPair.makeRandom({ network });
-      const pubkey = keyPair.getPublicKeyBuffer();
-      const wif = keyPair.toWIF();
-
-      const script = bitcoin.script.compile([
-        bitcoin.script.number.encode(locktime),
-        bitcoin.opcodes.OP_CHECKLOCKTIMEVERIFY,
-        bitcoin.opcodes.OP_DROP,
-        pubkey,
-        bitcoin.opcodes.OP_CHECKSIG,
-      ]);
-
-      const { address } = bitcoin.payments.p2sh({ redeem: { output: script, network }, network });
-
-      document.getElementById("output").style.display = "block";
-      document.getElementById("wif").innerText = wif;
-      document.getElementById("pubkey").innerText = pubkey.toString("hex");
-      document.getElementById("redeem").innerText = script.toString("hex");
-      document.getElementById("address").innerText = address;
-    }
-
-    window.onload = updateDate;
+    document.getElementById('date').addEventListener('change', function() {
+      const date = new Date(this.value);
+      document.getElementById('locktime').value = Math.floor(date.getTime() / 1000);
+    });
   </script>
 </body>
 </html>
